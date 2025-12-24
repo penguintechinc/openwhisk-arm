@@ -1,0 +1,108 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database - Development
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_INITDB_ARGS: "-c log_statement=all -c log_duration=on"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Redis/Valkey Cache - Development
+  redis:
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --loglevel debug
+
+  # MinIO Object Storage - Development
+  minio:
+    environment:
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+
+  # Flask Controller API - Development
+  controller-api:
+    build:
+      context: ./services/controller-api
+      dockerfile: Dockerfile
+      cache_from:
+        - penguinwhisk-controller-api:latest
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+      - "5678:5678"
+    volumes:
+      - ./services/controller-api:/app
+      - controller_logs:/app/logs
+    command: flask run --host=0.0.0.0
+    restart: on-failure
+
+  # Go Invoker Service - Development
+  invoker:
+    build:
+      context: ./services/invoker
+      dockerfile: Dockerfile.dev
+      cache_from:
+        - penguinwhisk-invoker:latest
+    environment:
+      LOG_LEVEL: debug
+      INVOKER_DEBUG: 1
+    ports:
+      - "8085:8085"
+      - "40000:40000"
+      - "2345:2345"
+    volumes:
+      - ./services/invoker:/app
+      - invoker_logs:/app/logs
+    restart: on-failure
+
+  # Node.js WebUI - Development
+  webui:
+    build:
+      context: ./services/webui
+      dockerfile: Dockerfile.dev
+      cache_from:
+        - penguinwhisk-webui:latest
+    environment:
+      NODE_ENV: development
+      REACT_APP_API_URL: http://localhost:8080
+      REACT_APP_INVOKER_URL: http://localhost:8085
+      REACT_APP_DEBUG: 1
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    volumes:
+      - ./services/webui:/app
+      - ./services/webui/node_modules:/app/node_modules
+    command: npm start
+    restart: on-failure
+
+  # Nginx Reverse Proxy - Development
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./config/nginx/ssl:/etc/nginx/ssl:ro
+    environment:
+      NGINX_LOG_LEVEL: debug
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  controller_logs:
+  invoker_logs:
+
+networks:
+  penguinwhisk-net:
+    driver: bridge

@@ -1,0 +1,108 @@
+# OpenWhisk Controller Configuration
+
+# Server configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  protocol: "http"
+  # For production, use https and configure TLS
+  # tls:
+  #   enabled: true
+  #   cert_file: "/etc/openwhisk/certs/cert.pem"
+  #   key_file: "/etc/openwhisk/certs/key.pem"
+
+# Database configuration
+database:
+  type: "${DB_TYPE:postgres}"
+  host: "${DB_HOST:localhost}"
+  port: ${DB_PORT:5432}
+  name: "${DB_NAME:openwhisk_db}"
+  username: "${DB_USER:openwhisk_user}"
+  password: "${DB_PASSWORD:}"
+  pool_size: 20
+  max_overflow: 40
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# Redis configuration
+redis:
+  url: "${REDIS_URL:redis://localhost:6379}"
+  db: 0
+  timeout: 30
+  connection_pool_size: 10
+
+# Authentication configuration
+auth:
+  jwt:
+    enabled: true
+    secret_key: "${JWT_SECRET_KEY:change-me-in-production}"
+    algorithm: "HS256"
+    expiration_hours: 24
+  mfa:
+    enabled: false
+  # SSO configuration (enterprise feature)
+  # sso:
+  #   enabled: false
+  #   provider: "saml"
+  #   metadata_url: "https://idp.example.com/metadata"
+
+# License configuration
+license:
+  enabled: "${RELEASE_MODE:false}"
+  server_url: "${LICENSE_SERVER_URL:https://license.penguintech.io}"
+  product_name: "${PRODUCT_NAME:openwhisk-arm}"
+  license_key: "${LICENSE_KEY:}"
+  cache_ttl_seconds: 3600
+  validation_endpoint: "/api/v2/validate"
+  features_endpoint: "/api/v2/features"
+
+# Logging configuration
+logging:
+  level: "${LOG_LEVEL:INFO}"
+  format: "json"
+  outputs:
+    - "stdout"
+    # - "file"
+    # file_path: "/var/log/openwhisk/controller.log"
+    # max_size_mb: 100
+    # max_age_days: 7
+    # max_backups: 5
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 9090
+  endpoint: "/metrics"
+  namespace: "openwhisk_controller"
+
+# API versioning
+api:
+  version: "v1"
+  base_path: "/api"
+  rate_limit:
+    enabled: true
+    requests_per_second: 1000
+    burst_size: 100
+
+# Invoker configuration
+invoker:
+  timeout_seconds: 300
+  max_concurrent_invocations: 500
+  memory_limits:
+    min_mb: 128
+    max_mb: 2048
+    default_mb: 512
+
+# Namespaces and subjects
+namespaces:
+  default_namespace: "default"
+  allow_custom_namespaces: true
+
+# Feature toggles
+features:
+  enable_activation_logs: true
+  enable_audit_logging: true
+  enable_action_packaging: true
+  enable_nodejs_runtime: true
+  enable_python_runtime: true
+  enable_go_runtime: true

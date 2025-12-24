@@ -1,0 +1,141 @@
+# OpenWhisk Invoker Configuration
+
+# Server configuration
+server:
+  host: "0.0.0.0"
+  port: 8081
+  protocol: "http"
+  # For production, use https and configure TLS
+  # tls:
+  #   enabled: true
+  #   cert_file: "/etc/openwhisk/certs/cert.pem"
+  #   key_file: "/etc/openwhisk/certs/key.pem"
+
+# Database configuration
+database:
+  type: "${DB_TYPE:postgres}"
+  host: "${DB_HOST:localhost}"
+  port: ${DB_PORT:5432}
+  name: "${DB_NAME:openwhisk_db}"
+  username: "${DB_USER:openwhisk_user}"
+  password: "${DB_PASSWORD:}"
+  pool_size: 20
+  max_overflow: 40
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# Redis configuration (for activation queues and caching)
+redis:
+  url: "${REDIS_URL:redis://localhost:6379}"
+  db: 1
+  timeout: 30
+  connection_pool_size: 10
+
+# Container runtime configuration
+container_runtime:
+  type: "docker"
+  # Supported types: docker, containerd, cri-o
+  socket: "/var/run/docker.sock"
+  # High-performance networking (case-by-case)
+  xdp_enabled: false
+  af_xdp_enabled: false
+  numa_aware: false
+
+# Action execution configuration
+execution:
+  timeout_seconds: 300
+  max_concurrent_actions: 100
+  max_retries: 3
+  memory_limits:
+    min_mb: 128
+    max_mb: 2048
+    default_mb: 512
+
+# Container pooling
+container_pool:
+  enabled: true
+  min_size: 5
+  max_size: 50
+  idle_timeout_seconds: 300
+  warm_container_reuse: true
+
+# Activation logging
+activation_logs:
+  enabled: true
+  max_log_size_mb: 10
+  max_log_lines: 10000
+  store_type: "file"
+  # store_type: "s3"
+  # s3:
+  #   bucket: "openwhisk-activations"
+  #   region: "us-east-1"
+
+# MinIO configuration (for artifact storage)
+minio:
+  enabled: false
+  endpoint: "${MINIO_ENDPOINT:minio:9000}"
+  access_key: "${MINIO_ACCESS_KEY:minioadmin}"
+  secret_key: "${MINIO_SECRET_KEY:minioadmin}"
+  bucket: "openwhisk-artifacts"
+  use_ssl: false
+
+# Logging configuration
+logging:
+  level: "${LOG_LEVEL:INFO}"
+  format: "json"
+  outputs:
+    - "stdout"
+    # - "file"
+    # file_path: "/var/log/openwhisk/invoker.log"
+    # max_size_mb: 100
+    # max_age_days: 7
+    # max_backups: 5
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 9091
+  endpoint: "/metrics"
+  namespace: "openwhisk_invoker"
+
+# License configuration
+license:
+  enabled: "${RELEASE_MODE:false}"
+  server_url: "${LICENSE_SERVER_URL:https://license.penguintech.io}"
+  product_name: "${PRODUCT_NAME:openwhisk-arm}"
+  license_key: "${LICENSE_KEY:}"
+  cache_ttl_seconds: 3600
+
+# Runtime configurations
+runtimes:
+  nodejs:
+    enabled: true
+    versions:
+      - "18"
+      - "20"
+  python:
+    enabled: true
+    versions:
+      - "3.9"
+      - "3.10"
+      - "3.11"
+      - "3.12"
+      - "3.13"
+  go:
+    enabled: true
+    versions:
+      - "1.21"
+      - "1.22"
+      - "1.23"
+
+# Performance tuning
+performance:
+  # Enable NUMA-aware memory allocation for multi-socket systems
+  numa_enabled: false
+  # Enable XDP/AF_XDP for high-performance networking (>100K packets/sec)
+  advanced_networking: false
+  # Connection pooling
+  connection_pool_size: 50
+  # Queue configuration
+  queue_batch_size: 10
+  queue_poll_interval_ms: 100

@@ -1,0 +1,12 @@
+{
+  "name": "penguinwhisk-runtime-nodejs20",
+  "version": "1.0.0",
+  "description": "PenguinWhisk Node.js 20 runtime",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js"
+  },
+  "keywords": ["openwhisk", "runtime", "nodejs"],
+  "author": "Penguin Tech Inc",
+  "license": "AGPL-3.0"
+}

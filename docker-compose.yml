@@ -1,0 +1,213 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: penguinwhisk-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-penguinwhisk}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: ${DB_AUTH_METHOD:-md5}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis/Valkey Cache
+  redis:
+    image: redis:7-alpine
+    container_name: penguinwhisk-redis
+    ports:
+      - "6379:6379"
+    environment:
+      REDIS_APPENDONLY: ${REDIS_APPENDONLY:-yes}
+    volumes:
+      - redis_data:/data
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: penguinwhisk-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: minio server /data --console-address ":9001"
+
+  # Flask Controller API
+  controller-api:
+    build:
+      context: ./services/controller-api
+      dockerfile: Dockerfile
+    container_name: penguinwhisk-controller-api
+    ports:
+      - "8080:8080"
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_APP: ${FLASK_APP:-app:create_app}
+      DB_TYPE: ${DB_TYPE:-postgresql}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-penguinwhisk}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_HOST: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      SECURITY_PASSWORD_SALT: ${SECURITY_PASSWORD_SALT:-change-me-in-production}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://license.penguintech.io}
+      LICENSE_KEY: ${LICENSE_KEY:-}
+      PRODUCT_NAME: ${PRODUCT_NAME:-penguinwhisk}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - controller_logs:/app/logs
+
+  # Go Invoker Service
+  invoker:
+    build:
+      context: ./services/invoker
+      dockerfile: Dockerfile
+    container_name: penguinwhisk-invoker
+    ports:
+      - "8085:8085"
+    environment:
+      INVOKER_PORT: 8085
+      CONTROLLER_URL: http://controller-api:8080
+      REDIS_URL: redis://redis:6379/1
+      DB_TYPE: ${DB_TYPE:-postgresql}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-penguinwhisk}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      controller-api:
+        condition: service_healthy
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - invoker_logs:/app/logs
+
+  # Node.js WebUI
+  webui:
+    build:
+      context: ./services/webui
+      dockerfile: Dockerfile
+    container_name: penguinwhisk-webui
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
+      REACT_APP_INVOKER_URL: ${REACT_APP_INVOKER_URL:-http://localhost:8085}
+      PORT: 3000
+    depends_on:
+      - controller-api
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: penguinwhisk-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./config/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - webui
+      - controller-api
+      - invoker
+    networks:
+      - penguinwhisk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  penguinwhisk-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  controller_logs:
+    driver: local
+  invoker_logs:
+    driver: local

@@ -1,0 +1,14 @@
+flask>=3.0.0
+flask-security-too>=5.4.0
+flask-sqlalchemy>=3.1.0
+sqlalchemy>=2.0.0
+pydal>=20240101
+redis>=5.0.0
+minio>=7.2.0
+gunicorn>=21.0.0
+pyjwt>=2.8.0
+bcrypt>=4.1.0
+python-dotenv>=1.0.0
+marshmallow>=3.20.0
+psycopg2-binary>=2.9.9
+pymysql>=1.1.0
